@@ -1,0 +1,40 @@
+name: Deploy Angular App
+
+on:
+  push:
+    branches:
+      - main  # Deploy on every commit to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up SSH private key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+
+    - name: Add server to known hosts
+      run: |
+        ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+    - name: Deploy Angular App
+      env:
+        SERVER_USER: ${{ secrets.SERVER_USER }}
+        SERVER_IP: ${{ secrets.SERVER_IP }}
+      run: |
+        ssh -i ~/.ssh/id_ed25519 $SERVER_USER@$SERVER_IP << 'EOF'
+          set -e  # Exit immediately if a command fails
+          cd /home/ubuntu/project/angular-example-app  # Change to your project directory
+          git pull origin main  # Pull latest changes
+          sudo npm install --legacy-peer-deps  # Install dependencies
+          sudo npm run build --prod  # Build the Angular app
+          # Move build files to web server directory
+          sudo rm -rf /var/www/html/*
+          sudo cp -r dist/* /var/www/html/
+        EOF
